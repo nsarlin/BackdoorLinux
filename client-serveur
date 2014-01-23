@@ -1,0 +1,2 @@
+Le client et serveur TCP.Je suis entrain de chercher comment on peut envoyer des paquets ethernet que l'on va forger nous même.
+Je n'ai trouver que scapy pour le faire pour l'instant. 
