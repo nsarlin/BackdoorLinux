@@ -1,0 +1,37 @@
+Backdoor Linux
+
+Matthieu Renard, Nicolas Sarlin, Ivan Landry, Ibrahima Sory Sow
+
+Le repertoire rooty contient un module noyau qui hijack un appel système.
+Ce module peut être rendu invisible (impossibilité de le supprimer avec rmmod),
+et peut remplacer l'appel système write ou l'appel système getdents64.
+Dans les deux cas, le but est de cacher un fichier nommé ".rooty" lors de
+l'utilisation de ls. Remplacer write fonctionne moins bien que remplacer
+getdents64 et semble plus facile à détecter.
+
+Pour compiler le module (visible, remplacement de getdents54 par défaut) :
+make
+
+Pour compiler en ajoutant l'invisibilité :
+make invisible
+
+Pour remplacer write au lieu de getdents64 :
+make write
+
+Pour remplacer write et être invisible :
+make invisible_write
+
+
+Il faut ensuite charger le module, et le dossier .rooty n'appraîtra plus. Si c'est write qui est remplacé, il risque de ne pas être le seul...
+Si le module est invisible, il faut redémarrer le système pour le décharger.
+
+
+Dans le dossier keylogger simplement faire :
+make
+
+Cela crée un executable keylogger, qui recupere tous les evenements du clavier.
+Cet executable doit etre lance en tant que root et prend en parametre le fichier
+correspondant au clavier (fichier /dev/input/eventX).
+
+
+
